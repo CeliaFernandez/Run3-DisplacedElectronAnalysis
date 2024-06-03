@@ -6,9 +6,9 @@ ntuples = cms.EDAnalyzer('ntuplizer',
     EventInfo = cms.InputTag("generator"),
     RunInfo = cms.InputTag("generator"),
     BeamSpot = cms.InputTag("offlineBeamSpot"),
-    displacedGlobalCollection = cms.InputTag("displacedGlobalMuons"),
-    displacedStandAloneCollection = cms.InputTag("displacedStandAloneMuons"),
-    displacedMuonCollection = cms.InputTag("slimmedDisplacedMuons")
+    reducedBarrelRecHitCollection = cms.InputTag("reducedEgamma", "reducedEBRecHits"),
+    reducedEndcapRecHitCollection = cms.InputTag("reducedEgamma", "reducedEERecHits"),
+    photonCollection = cms.InputTag("slimmedPhotons")
 )
 
 

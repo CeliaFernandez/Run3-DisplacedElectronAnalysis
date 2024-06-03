@@ -11,7 +11,7 @@
 #include "SimDataFormats/GeneratorProducts/interface/HepMCProduct.h"
 
 #include "DataFormats/Common/interface/Handle.h"
-#include "DataFormats/PatCandidates/interface/Muon.h"
+#include "DataFormats/PatCandidates/interface/Photon.h"
 #include "DataFormats/MuonReco/interface/Muon.h"
 #include "DataFormats/RecoCandidate/interface/RecoCandidate.h"
 #include "DataFormats/Candidate/interface/Candidate.h"
@@ -20,6 +20,15 @@
 #include "DataFormats/PatCandidates/interface/PackedTriggerPrescales.h"
 #include "DataFormats/TrackReco/interface/Track.h"
 #include "DataFormats/TrackReco/interface/TrackFwd.h"
+
+#include "RecoEcal/EgammaCoreTools/interface/EcalClusterLazyTools.h"
+#include "RecoEcal/EgammaCoreTools/interface/EcalClusterTools.h"
+#include "DataFormats/EcalDetId/interface/EcalSubdetector.h"
+#include "Geometry/CaloTopology/interface/CaloSubdetectorTopology.h"
+#include "Geometry/CaloGeometry/interface/CaloGeometry.h"
+#include "Geometry/CaloTopology/interface/CaloTopology.h"
+#include "Geometry/Records/interface/IdealGeometryRecord.h"
+#include "Geometry/Records/interface/CaloTopologyRecord.h"
 
 #include <string>
 #include <iostream>
@@ -31,6 +40,17 @@
 #include "TH1F.h"
 #include "TFile.h"
 
+
+struct SC {
+  std::vector<float> et, eta, phi;
+  std::vector<float> seedTime;
+
+  void clear() {
+    et.clear(); eta.clear(); phi.clear();
+    seedTime.clear();
+  };
+
+};
 
 
 class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
@@ -56,15 +76,18 @@ class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
       edm::EDGetTokenT<edm::View<pat::TriggerObjectStandAlone> > triggerObjects_;
       edm::EDGetTokenT<pat::PackedTriggerPrescales>  triggerPrescales_;
 
-      // displacedGlobalMuons (reco::Track)
-      edm::EDGetTokenT<edm::View<reco::Track> > dglToken;
-      edm::Handle<edm::View<reco::Track> > dgls;
-      // displacedStandAloneMuons (reco::Track)
-      edm::EDGetTokenT<edm::View<reco::Track> > dsaToken;
-      edm::Handle<edm::View<reco::Track> > dsas;
-      // displacedMuons (reco::Muon // pat::Muon)
-      edm::EDGetTokenT<edm::View<pat::Muon> > dmuToken;
-      edm::Handle<edm::View<pat::Muon> > dmuons;
+      edm::EDGetTokenT<edm::View<pat::Photon> > photonToken;
+      edm::Handle<edm::View<pat::Photon> > photons;
+
+      edm::EDGetTokenT<EcalRecHitCollection> reducedBarrelRecHitCollectionToken_;
+      edm::EDGetTokenT<EcalRecHitCollection> reducedEndcapRecHitCollectionToken_;
+      // edm::Handle<EcalRecHitCollection> ebRecHits_;
+      // edm::Handle<EcalRecHitCollection> ecRecHits_;
+
+      EcalRecHitCollection ebRecHits_;
+      EcalRecHitCollection eeRecHits_;
+
+      //const EcalClusterLazyTools::ESGetTokens ecalClusterToolsESGetTokens_;
 
       //
       // --- Variables
@@ -77,29 +100,9 @@ class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
       Int_t lumiBlock = 0;
       Int_t run = 0;
 
-      // displacedGlobalMuons
-      Int_t ndgl = 0;
-      Float_t dgl_pt[200] = {0.};
-      Float_t dgl_eta[200] = {0.};
-      Float_t dgl_phi[200] = {0.};
-      Int_t dgl_nhits[200] = {0};
-
-      // displacedStandAloneMuons
-      Int_t ndsa = 0;
-      Float_t dsa_pt[200] = {0.};
-      Float_t dsa_eta[200] = {0.};
-      Float_t dsa_phi[200] = {0.};
-      Int_t dsa_nhits[200] = {0};
-
-      // displacedMuons
-      Int_t ndmu = 0;
-      Float_t dmu_pt[200] = {0.};
-      Float_t dmu_eta[200] = {0.};
-      Float_t dmu_phi[200] = {0.};
-      Int_t dmu_isDSA[200] = {0};
-      Int_t dmu_isDGL[200] = {0};
-      Int_t dmu_isDTK[200] = {0};
-      Float_t dmu_dsa_pt[200] = {0.};
+      // Branch variables
+      int nSC;
+      SC SCs;
 
       //
       // --- Output
@@ -112,18 +115,21 @@ class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
 };
 
 // Constructor
-ntuplizer::ntuplizer(const edm::ParameterSet& iConfig) {
+// ntuplizer::ntuplizer(const edm::ParameterSet& iConfig)  {
+ntuplizer::ntuplizer(const edm::ParameterSet& iConfig) 
+  : reducedBarrelRecHitCollectionToken_(consumes<EcalRecHitCollection>(iConfig.getParameter<edm::InputTag>("reducedBarrelRecHitCollection"))),
+    reducedEndcapRecHitCollectionToken_(consumes<EcalRecHitCollection>(iConfig.getParameter<edm::InputTag>("reducedEndcapRecHitCollection"))) {
+//    ecalClusterToolsESGetTokens_{iC} {
 
+   std::cout << "Constructor" << std::endl;
    usesResource("TFileService");
 
    parameters = iConfig;
 
    counts = new TH1F("counts", "", 1, 0, 1);
 
-   isData = consumes<edm::View<reco::Track> >  (parameters.getParameter<edm::InputTag>("displacedGlobalCollection"));
-   dglToken = consumes<edm::View<reco::Track> >  (parameters.getParameter<edm::InputTag>("displacedGlobalCollection"));
-   dsaToken = consumes<edm::View<reco::Track> >  (parameters.getParameter<edm::InputTag>("displacedStandAloneCollection"));
-   dmuToken = consumes<edm::View<pat::Muon> >  (parameters.getParameter<edm::InputTag>("displacedMuonCollection"));
+   isData = parameters.getParameter<bool>("isData");
+   photonToken = consumes<edm::View<pat::Photon> >  (parameters.getParameter<edm::InputTag>("photonCollection"));
 
 }
 
@@ -146,31 +152,17 @@ void ntuplizer::beginJob() {
    // Analyzer parameters
    isData = parameters.getParameter<bool>("isData");
 
+
    // TTree branches
    tree_out->Branch("event", &event, "event/I");
    tree_out->Branch("lumiBlock", &lumiBlock, "lumiBlock/I");
    tree_out->Branch("run", &run, "run/I");
 
-   tree_out->Branch("ndgl", &ndgl, "ndgl/I");
-   tree_out->Branch("dgl_pt", dgl_pt, "dgl_pti[ndgl]/F");
-   tree_out->Branch("dgl_eta", dgl_eta, "dgl_eta[ndgl]/F");
-   tree_out->Branch("dgl_phi", dgl_phi, "dgl_phi[ndgl]/F");
-   tree_out->Branch("dgl_nhits", dgl_nhits, "dgl_nhits[ndgl]/I");
-
-   tree_out->Branch("ndsa", &ndsa, "ndsa/I");
-   tree_out->Branch("dsa_pt", dsa_pt, "dsa_pt[ndsa]/F");
-   tree_out->Branch("dsa_eta", dsa_eta, "dsa_eta[ndsa]/F");
-   tree_out->Branch("dsa_phi", dsa_phi, "dsa_phi[ndsa]/F");
-   tree_out->Branch("dsa_nhits", dsa_nhits, "dsa_nhits[ndsa]/I");
-
-   tree_out->Branch("ndmu", &ndmu, "ndmu/I");
-   tree_out->Branch("dmu_pt", dmu_pt, "dmu_pt[ndmu]/F");
-   tree_out->Branch("dmu_eta", dmu_eta, "dmu_eta[ndmu]/F");
-   tree_out->Branch("dmu_phi", dmu_phi, "dmu_phi[ndmu]/F");
-   tree_out->Branch("dmu_isDSA", dmu_isDSA, "dmu_isDSA[ndmu]/I");
-   tree_out->Branch("dmu_isDGL", dmu_isDGL, "dmu_isDGL[ndmu]/I");
-   tree_out->Branch("dmu_isDTK", dmu_isDTK, "dmu_isDTK[ndmu]/I");
-   tree_out->Branch("dmu_dsa_pt", dmu_dsa_pt, "dmu_dsa_pt[ndmu]/F");
+   tree_out->Branch("nSC", &nSC);
+   tree_out->Branch("SC_et", &SCs.et);
+   tree_out->Branch("SC_eta", &SCs.eta);
+   tree_out->Branch("SC_phi", &SCs.phi);
+   tree_out->Branch("SC_seedTime", &SCs.seedTime);
 
 
 }
@@ -200,13 +192,18 @@ void ntuplizer::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
 // Analyze (per event)
 void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
 
-   iEvent.getByToken(dglToken, dgls);
-   iEvent.getByToken(dsaToken, dsas);
-   iEvent.getByToken(dmuToken, dmuons);
+   iEvent.getByToken(photonToken, photons);
+   ebRecHits_ = iEvent.get(reducedBarrelRecHitCollectionToken_);
+   eeRecHits_ = iEvent.get(reducedEndcapRecHitCollectionToken_);
+   //iEvent.getByToken(reducedBarrelRecHitCollectionToken_, ebRecHits_);
+   //iEvent.getByToken(reducedEndcapRecHitCollectionToken_, eeRecHits_);
+
+   // Clear all variables
+   nSC = 0;
+   SCs.clear();
 
    // Count number of events read
    counts->Fill(0);
-
 
    // -> Event info
    event = iEvent.id().event();
@@ -214,48 +211,57 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    run = iEvent.id().run();
 
 
-   // displacedGlobalMuons
-   ndgl = 0;
-   for (unsigned int i = 0; i < dgls->size(); i++) {
-     const reco::Track& dgl(dgls->at(i));
-     dgl_pt[ndgl] = dgl.pt();
-     dgl_eta[ndgl] = dgl.eta();
-     dgl_phi[ndgl] = dgl.phi();
-     dgl_nhits[ndgl] = dgl.hitPattern().numberOfValidHits();
-     ndgl++;
-   }
+   // -> Superclusters
+   //EcalClusterLazyTools lazyTool(iEvent, iSetup, ebReducedRecHitCollection_, eeReducedRecHitCollection_, esReducedRecHitCollection_);
+   //edm::InputTag reducedEBRecHitCollection(string("reducedEcalRecHitsEB"));
+   //edm::InputTag reducedEERecHitCollection(string("reducedEcalRecHitsEE"));
+   //EcalClusterLazyTools lazyTools(iEvent, ecalClusterToolsESGetTokens_.get(iSetup), reducedBarrelRecHitCollectionToken_, reducedEndcapRecHitCollectionToken_);
+   for (const auto& pho : *photons) {
+     nSC++;
+     SCs.et.push_back(pho.et());
+     SCs.eta.push_back(pho.eta());
+     SCs.phi.push_back(pho.phi());
 
-   // displacedStandAloneMuons
-   ndsa = 0;
-   for (unsigned int i = 0; i < dsas->size(); i++) {
-     const reco::Track& dsa(dsas->at(i));
-     dsa_pt[ndsa] = dsa.pt();
-     dsa_eta[ndsa] = dsa.eta();
-     dsa_phi[ndsa] = dsa.phi();
-     dsa_nhits[ndsa] = dsa.hitPattern().numberOfValidHits();
-     ndsa++;
-   }
+     reco::SuperClusterRef clusterRef = pho.superCluster();
+     reco::SuperCluster cluster = *clusterRef;
+     if (cluster.size() > 0) {
+       DetId id = (cluster.hitsAndFractions()[0]).first;
+       EcalRecHitCollection *recHits = nullptr;
+       if (id.subdetId() == EcalBarrel) {
+         recHits = &ebRecHits_;
+       } else if (id.subdetId() == EcalEndcap) {
+         recHits = &eeRecHits_;
+       } else {
+         std::cout << "Invalid subdet, should never happen" << std::endl;
+       }
 
-   // displacedMuons
-   ndmu = 0;;
-   for (unsigned int i = 0; i < dmuons->size(); i++) {
-     const pat::Muon& dmuon(dmuons->at(i));
-     dmu_pt[ndmu] = dmuon.pt();
-     dmu_eta[ndmu] = dmuon.eta();
-     dmu_phi[ndmu] = dmuon.phi();
-     dmu_isDGL[ndmu] = dmuon.isGlobalMuon();
-     dmu_isDSA[ndmu] = dmuon.isStandAloneMuon();
-     dmu_isDTK[ndmu] = dmuon.isTrackerMuon();
-
-     // Access the DSA track associated to the displacedMuon
-     if ( dmuon.isStandAloneMuon() ) {
-       const reco::Track* outerTrack = (dmuon.standAloneMuon()).get();
-       dmu_dsa_pt[ndmu] = outerTrack->pt();
+       auto theSeedHit = recHits->find(id);
+       if (theSeedHit != recHits->end())
+         SCs.seedTime.push_back((*theSeedHit).time());
+       else
+         SCs.seedTime.push_back(-99.);
+     } else {
+       SCs.seedTime.push_back(-99.);
      }
 
-     ndmu++;
-   }
+     // Get the time
+     //std::cout << lazyTools.SuperClusterTime(*pho.superCluster(), iEvent) << std::endl;
+     /*
+     DetId seed = (pho.superCluster()->seed()->hitsAndFractions())[0].first;
+     bool isBarrel = seed.subdetId() == EcalBarrel;
+     const EcalRecHitCollection * rechits = (isBarrel?lazyTool.getEcalEBRecHitCollection():lazyTool.getEcalEERecHitCollection());
+     EcalRecHitCollection::const_iterator theSeedHit = rechits->find(seed);
+     if (theSeedHit != rechits->end()) {
+     phoSeedTime_  .push_back((*theSeedHit).time());
+       phoSeedEnergy_.push_back((*theSeedHit).energy());
+     } else{
+       phoSeedTime_  .push_back(-99.);
+       phoSeedEnergy_.push_back(-99.);
+     }
+     */
 
+
+   }
 
    // -> Fill tree
    tree_out->Fill();
