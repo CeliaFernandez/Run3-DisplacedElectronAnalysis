@@ -29,7 +29,7 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(nEvents) )
 
 # Read events
 #listOfFiles = ['/store/data/Run2022F/EGamma/MINIAOD/PromptReco-v1/000/360/389/00000/02d37797-3eda-47c4-bba9-1f28b1402dd7.root']
-listOfFiles = ['file:/eos/user/f/fernance/Run3-Analyses/SnT-Supercluster/CMSSW_12_4_11_patch3/src/EXO-Run3Summer22EEMiniAODv3-00772.root']
+listOfFiles = ['file:test/99fba257-a893-48ef-b71f-d9cbb9857377.root']
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring( listOfFiles ),
     secondaryFileNames = cms.untracked.vstring(),

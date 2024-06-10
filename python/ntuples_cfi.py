@@ -8,7 +8,9 @@ ntuples = cms.EDAnalyzer('ntuplizer',
     BeamSpot = cms.InputTag("offlineBeamSpot"),
     reducedBarrelRecHitCollection = cms.InputTag("reducedEgamma", "reducedEBRecHits"),
     reducedEndcapRecHitCollection = cms.InputTag("reducedEgamma", "reducedEERecHits"),
-    photonCollection = cms.InputTag("slimmedPhotons")
+    photonCollection = cms.InputTag("slimmedPhotons"),
+    lowPtElectronCollection = cms.InputTag("slimmedLowPtElectrons"),
+    electronCollection = cms.InputTag("slimmedElectrons")
 )
 
 
