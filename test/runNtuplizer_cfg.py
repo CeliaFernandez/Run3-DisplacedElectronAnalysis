@@ -10,6 +10,7 @@ process.load('Configuration.StandardSequences.MagneticField_cff')
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
 process.load("Configuration.StandardSequences.Reconstruction_cff")
 process.load('Configuration.StandardSequences.Services_cff')
+process.load("TrackingTools/TransientTrack/TransientTrackBuilder_cfi")
 
 # Debug printout and summary.
 process.load("FWCore.MessageService.MessageLogger_cfi")
@@ -42,7 +43,8 @@ listOfFiles = []
 #listOfFiles.append('/store/mc/Run3Summer22MiniAODv4/SquarkToNeutralinoTo2LNu-MSquark_350_MChi_150_ctau_25mm_TuneCP5_13p6TeV_pythia8/MINIAODSIM/130X_mcRun3_2022_realistic_v5-v2/50000/68f92996-453d-412e-9141-2c75830cfff9.root')
 #listOfFiles.append('/store/mc/Run3Summer22MiniAODv4/SquarkToNeutralinoTo2LNu-MSquark_350_MChi_150_ctau_25mm_TuneCP5_13p6TeV_pythia8/MINIAODSIM/130X_mcRun3_2022_realistic_v5-v2/50000/f8176527-8861-4f76-8765-8c4b58f5c1f8.root')
 ## Drell-Yan
-listOfFiles.append('/store/mc/Run3Summer22MiniAODv4/DYJetsToLL_M-50_TuneCP5_13p6TeV-madgraphMLM-pythia8/MINIAODSIM/130X_mcRun3_2022_realistic_v5-v2/30000/38a57f5e-e24f-4b08-a1a4-b83501c9aa02.root')
+#listOfFiles.append('/store/mc/Run3Summer22MiniAODv4/DYJetsToLL_M-50_TuneCP5_13p6TeV-madgraphMLM-pythia8/MINIAODSIM/130X_mcRun3_2022_realistic_v5-v2/30000/38a57f5e-e24f-4b08-a1a4-b83501c9aa02.root')
+listOfFiles.append('file:/eos/user/f/fernance/standard-TutoriasFiles/a67c5e70-431d-4e65-a6d9-5af6e7645ddb.root')
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring( listOfFiles ),
     secondaryFileNames = cms.untracked.vstring(),

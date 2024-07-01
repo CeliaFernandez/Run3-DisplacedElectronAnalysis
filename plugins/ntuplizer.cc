@@ -30,6 +30,13 @@
 #include "Geometry/Records/interface/IdealGeometryRecord.h"
 #include "Geometry/Records/interface/CaloTopologyRecord.h"
 
+#include "TrackingTools/Records/interface/TransientTrackRecord.h"
+#include "TrackingTools/TransientTrack/interface/TransientTrackBuilder.h"
+#include "TrackingTools/TransientTrack/interface/TransientTrack.h"
+#include "RecoVertex/AdaptiveVertexFit/interface/AdaptiveVertexFitter.h"
+#include "RecoVertex/VertexPrimitives/interface/TransientVertex.h"
+#include "RecoVertex/VertexTools/interface/GeometricAnnealing.h"
+
 #include <string>
 #include <iostream>
 #include <vector>
@@ -117,6 +124,8 @@ class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
       edm::EDGetTokenT<edm::View<pat::Electron> > electronToken;
       edm::Handle<edm::View<pat::Electron> > electrons;
 
+      const edm::ESGetToken<TransientTrackBuilder, TransientTrackRecord> ttbESToken_;
+
       edm::EDGetTokenT<EcalRecHitCollection> reducedBarrelRecHitCollectionToken_;
       edm::EDGetTokenT<EcalRecHitCollection> reducedEndcapRecHitCollectionToken_;
       // edm::Handle<EcalRecHitCollection> ebRecHits_;
@@ -124,6 +133,7 @@ class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
 
       EcalRecHitCollection ebRecHits_;
       EcalRecHitCollection eeRecHits_;
+
 
       //const EcalClusterLazyTools::ESGetTokens ecalClusterToolsESGetTokens_;
 
@@ -161,7 +171,8 @@ class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
 // Constructor
 // ntuplizer::ntuplizer(const edm::ParameterSet& iConfig)  {
 ntuplizer::ntuplizer(const edm::ParameterSet& iConfig) 
-  : reducedBarrelRecHitCollectionToken_(consumes<EcalRecHitCollection>(iConfig.getParameter<edm::InputTag>("reducedBarrelRecHitCollection"))),
+  : ttbESToken_(esConsumes(edm::ESInputTag("", "TransientTrackBuilder"))),
+    reducedBarrelRecHitCollectionToken_(consumes<EcalRecHitCollection>(iConfig.getParameter<edm::InputTag>("reducedBarrelRecHitCollection"))),
     reducedEndcapRecHitCollectionToken_(consumes<EcalRecHitCollection>(iConfig.getParameter<edm::InputTag>("reducedEndcapRecHitCollection"))) {
 //    ecalClusterToolsESGetTokens_{iC} {
 
@@ -286,6 +297,8 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    //iEvent.getByToken(reducedBarrelRecHitCollectionToken_, ebRecHits_);
    //iEvent.getByToken(reducedEndcapRecHitCollectionToken_, eeRecHits_);
 
+   const TransientTrackBuilder* theB = &iSetup.getData(ttbESToken_);
+
    // Clear all variables
    nSC = 0;
    SCs.clear();
@@ -304,6 +317,7 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    // Low Pt Electrons
    for (const auto& ele : *lowPtElectrons) {
+     std::cout << ele.pt() << std::endl;
      nLowPtElectron++;
      lowPtElecs.pt.push_back(ele.pt());
      lowPtElecs.et.push_back(ele.et());
