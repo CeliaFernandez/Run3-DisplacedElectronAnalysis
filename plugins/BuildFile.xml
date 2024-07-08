@@ -13,6 +13,9 @@
 <use name="DataFormats/MuonReco"/>
 <use name="DataFormats/HepMCCandidate"/>
 <use name="DataFormats/VertexReco"/>
+<use name="RecoVertex/VertexTools"/>
+<use name="RecoVertex/KalmanVertexFit"/>
+<use name="RecoVertex/VertexPrimitives"/>
 <use name="SimDataFormats/GeneratorProducts"/>
 <use name="DataFormats/BeamSpot"/>
 <use name="TrackingTools/TransientTrack"/>
@@ -33,7 +36,6 @@
 <use name="Geometry/Records"/>
 <use name="RecoLocalCalo/EcalRecAlgos"/>
 <use name="CalibCalorimetry/EcalLaserCorrection"/>
-<use name="RecoVertex/VertexPrimitives"/>
 <use name="PhysicsTools/Utilities"/>
 <use name="MagneticField/Records"/>
 <use name="MagneticField/Engine"/>
