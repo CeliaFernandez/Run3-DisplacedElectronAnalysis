@@ -49,12 +49,12 @@
 #include "TFile.h"
 
 struct PV {
-  float x;
-  float y;
-  float z;
+  std::vector<float> x;
+  std::vector<float> y;
+  std::vector<float> z;
 
   void clear() {
-    x = 0.; y = 0.; z = 0.;
+    x.clear(); y.clear(); z.clear();
   };
 };
 
@@ -217,7 +217,7 @@ ntuplizer::~ntuplizer() {
 
 // beginJob (Before first event)
 void ntuplizer::beginJob() {
-
+   
    std::cout << "Begin Job" << std::endl;
 
    // Init the file and the TTree
@@ -234,7 +234,8 @@ void ntuplizer::beginJob() {
    tree_out->Branch("lumiBlock", &lumiBlock, "lumiBlock/I");
    tree_out->Branch("run", &run, "run/I");
 
-   //tree_out->Branch("primary_Vertex", &PVs.x)
+   tree_out->Branch("primary_Vertex_x", &PVs.x);
+   tree_out->Branch("primary_Vertex_y", &PVs.y);
 
    tree_out->Branch("nSC", &nSC);
    tree_out->Branch("SC_et", &SCs.et);
@@ -348,6 +349,8 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    */
    double vx = 0;                  // x coordinate of dilepton vertex
    double vy = 0;                  // y coordinate of dilepton vertex
+   double px = 0;                  // x coordinate of primary vertex
+   double py = 0;                  // y coordinate of primary vertex
    
    double Lxy_SV = -99; //Lxy of the secondary vertex
 
@@ -507,19 +510,19 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    for (int i=0; i<nLowPtElectron; i++){
     //Gets first electron
-    std::cout << "Electron" << std::endl;
-    std::cout << i << std::endl;
+    //std::cout << "Electron" << std::endl;
+    //std::cout << i << std::endl;
     Lxy_SV = -99;
-    normalizedChi2 = 0;
+    normalizedChi2 = 99;
     //hasValidVertex = false;
     for (int j=i+1; j<nLowPtElectron; j++){
-      std::cout << "Paied with Electron" << std::endl;
-      std::cout << j << std::endl;
+      //std::cout << "Paied with Electron" << std::endl;
+      //std::cout << j << std::endl;
       //isEE = false;
       double charge1 = lowPtElectrons->at(i).charge();
       double charge2 = lowPtElectrons->at(j).charge();
       if (charge1*charge2>0){
-        std::cout << "Invalid Pair" << std::endl;
+        //std::cout << "Invalid Pair" << std::endl;
         continue;
       };
         
@@ -573,12 +576,14 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
         temp_normalizedChi2 = myVertex.normalisedChiSquared();         
         vx = secV.x();
         vy = secV.y();
-        temp_Lxy_SV = std::sqrt(std::pow(vx-PVs.x, 2) + std::pow(vy-PVs.y, 2));
-        std::cout << "temp_Lxy_SV" << std::endl;
-        std::cout << temp_Lxy_SV << std::endl;
-        if (temp_normalizedChi2 > normalizedChi2){
+        //std::cout << PVs.x[-1] << std::endl;
+        //std::cout << PVs.x << std::endl;
+        temp_Lxy_SV = std::sqrt(std::pow(vx-PVs.x[0], 2) + std::pow(vy-PVs.y[0], 2));
+        if (temp_normalizedChi2 < normalizedChi2){
           Lxy_SV = temp_Lxy_SV;
           normalizedChi2 = temp_normalizedChi2;
+          px = PVs.x[0];
+          py = PVs.y[0];
         };
         /*
 
@@ -600,8 +605,8 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       };
     };
     lowPtElecs.Lxy_SV.push_back(Lxy_SV);
-    std::cout << "Lxy_SV" << std::endl;
-    std::cout << Lxy_SV << std::endl;
+    PVs.x.push_back(px);
+    PVs.y.push_back(py);
    };
 
    // -> Superclusters
