@@ -52,9 +52,11 @@ struct PV {
   std::vector<float> x;
   std::vector<float> y;
   std::vector<float> z;
+  //double x_temp; double y_temp; double z_temp; 
 
   void clear() {
     x.clear(); y.clear(); z.clear();
+    //x_temp = 0; y_temp = 0; z_temp = 0;
   };
 };
 
@@ -535,11 +537,14 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       reco::TransientTrack isotransienttrackA = theB->build(tr_A);
       reco::TransientTrack isotransienttrackB = theB->build(tr_B);
       vec_refitTracks.push_back(isotransienttrackA); vec_refitTracks.push_back(isotransienttrackB);
-
+    
       // Fit tracks:
       KalmanVertexFitter thefitterll;
       TransientVertex myVertex = thefitterll.vertex(vec_refitTracks);
       const reco::Vertex secV = myVertex;
+      const reco::Vertex PrimV = (*pVtxs)[0];
+
+
       if (secV.isValid()) {
       
         //hasValidVertex = true;
@@ -547,11 +552,11 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
         // Define the axis along the direction of the distance is defined:
         GlobalVector axis(0,0,0);
         axis = GlobalVector(secV.x(),secV.y(),secV.z());
-        /*
+        
         // Define the errors and points of the CMS centre point and the beam spot:
-        math::Error<3>::type e0; // dummy
-        math::Error<3>::type cov = bs.covariance3D();
-        math::XYZPoint pbs(bs.x0(), bs.y0(), bs.z0());
+        /*//math::Error<3>::type e0; // dummy
+        //math::Error<3>::type cov = bs.covariance3D();
+        //math::XYZPoint pbs(bs.x0(), bs.y0(), bs.z0());
         math::XYZPoint p0(0.0, 0.0, 0.0);
 
         // Fake vertices for the CMS centre and beam spot:
@@ -576,14 +581,15 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
         temp_normalizedChi2 = myVertex.normalisedChiSquared();         
         vx = secV.x();
         vy = secV.y();
-        //std::cout << PVs.x[-1] << std::endl;
+        
+        //std::cout << PrimV.x() << std::endl;
         //std::cout << PVs.x << std::endl;
-        temp_Lxy_SV = std::sqrt(std::pow(vx-PVs.x[0], 2) + std::pow(vy-PVs.y[0], 2));
+        temp_Lxy_SV = std::sqrt(std::pow(vx-PrimV.x(), 2) + std::pow(vy-PrimV.y(), 2));
         if (temp_normalizedChi2 < normalizedChi2){
           Lxy_SV = temp_Lxy_SV;
           normalizedChi2 = temp_normalizedChi2;
-          px = PVs.x[0];
-          py = PVs.y[0];
+          px = PrimV.x();
+          py = PrimV.y();
         };
         /*
 
