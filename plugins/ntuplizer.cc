@@ -36,6 +36,7 @@
 #include "RecoVertex/AdaptiveVertexFit/interface/AdaptiveVertexFitter.h"
 #include "RecoVertex/VertexPrimitives/interface/TransientVertex.h"
 #include "RecoVertex/VertexTools/interface/GeometricAnnealing.h"
+#include "RecoVertex/KalmanVertexFit/interface/KalmanVertexFitter.h"
 
 #include <string>
 #include <iostream>
@@ -46,6 +47,18 @@
 #include "TTree.h"
 #include "TH1F.h"
 #include "TFile.h"
+
+struct PV {
+  std::vector<float> x;
+  std::vector<float> y;
+  std::vector<float> z;
+  //double x_temp; double y_temp; double z_temp; 
+
+  void clear() {
+    x.clear(); y.clear(); z.clear();
+    //x_temp = 0; y_temp = 0; z_temp = 0;
+  };
+};
 
 
 struct SC {
@@ -61,6 +74,8 @@ struct SC {
 
 
 struct electron {
+  std::vector<float> charge;
+  std::vector<float> Lxy_SV;
   std::vector<float> pt, et, eta, phi;
   std::vector<float> dB, edB, ip3d;
   std::vector<float> sigmaIetaIphi, full5x5_sigmaIetaIphi;
@@ -74,6 +89,7 @@ struct electron {
   std::vector<float> avgSeedTime, avgClusterX, avgClusterY, avgClusterZ;
 
   void clear() {
+    charge.clear(); Lxy_SV.clear();
     pt.clear(); et.clear(); eta.clear(); phi.clear();
     dB.clear(); edB.clear(); ip3d.clear();
     sigmaIetaIphi.clear(); full5x5_sigmaIetaIphi.clear();
@@ -114,6 +130,8 @@ class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
       edm::EDGetTokenT<edm::TriggerResults> triggerBits_;
       edm::EDGetTokenT<edm::View<pat::TriggerObjectStandAlone> > triggerObjects_;
       edm::EDGetTokenT<pat::PackedTriggerPrescales>  triggerPrescales_;
+      edm::EDGetTokenT<edm::View<reco::Vertex> > primaryVertices;
+      edm::Handle<edm::View<reco::Vertex> > pVtxs;
 
       edm::EDGetTokenT<edm::View<pat::Photon> > photonToken;
       edm::Handle<edm::View<pat::Photon> > photons;
@@ -158,6 +176,8 @@ class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
       int nStdElectron;
       electron stdElecs;
 
+      PV PVs;
+
       //
       // --- Output
       //
@@ -187,6 +207,7 @@ ntuplizer::ntuplizer(const edm::ParameterSet& iConfig)
    photonToken = consumes<edm::View<pat::Photon> >  (parameters.getParameter<edm::InputTag>("photonCollection"));
    lowPtElectronToken = consumes<edm::View<pat::Electron> >  (parameters.getParameter<edm::InputTag>("lowPtElectronCollection"));
    electronToken = consumes<edm::View<pat::Electron> >  (parameters.getParameter<edm::InputTag>("electronCollection"));
+   primaryVertices = consumes<edm::View<reco::Vertex> >  (parameters.getParameter<edm::InputTag>("primaryVertexCollection"));
 
 }
 
@@ -198,7 +219,7 @@ ntuplizer::~ntuplizer() {
 
 // beginJob (Before first event)
 void ntuplizer::beginJob() {
-
+   
    std::cout << "Begin Job" << std::endl;
 
    // Init the file and the TTree
@@ -214,6 +235,9 @@ void ntuplizer::beginJob() {
    tree_out->Branch("event", &event, "event/I");
    tree_out->Branch("lumiBlock", &lumiBlock, "lumiBlock/I");
    tree_out->Branch("run", &run, "run/I");
+
+   tree_out->Branch("primary_Vertex_x", &PVs.x);
+   tree_out->Branch("primary_Vertex_y", &PVs.y);
 
    tree_out->Branch("nSC", &nSC);
    tree_out->Branch("SC_et", &SCs.et);
@@ -241,6 +265,8 @@ void ntuplizer::beginJob() {
    tree_out->Branch("lowPtElectron_dB", &lowPtElecs.dB);
    tree_out->Branch("lowPtElectron_edB", &lowPtElecs.edB);
    tree_out->Branch("lowPtElectron_ip3d", &lowPtElecs.ip3d);
+   tree_out->Branch("lowPtElectron_charge", &lowPtElecs.charge);
+   tree_out->Branch("lowPtElectron_Lxy_SV", &lowPtElecs.Lxy_SV);
    tree_out->Branch("lowPtElectron_sigmaIetaIphi", &lowPtElecs.sigmaIetaIphi);
    tree_out->Branch("lowPtElectron_full5x5_sigmaIetaIphi", &lowPtElecs.full5x5_sigmaIetaIphi);
    tree_out->Branch("lowPtElectron_ecalRegressionEnergy", &lowPtElecs.ecalRegressionEnergy);
@@ -288,10 +314,54 @@ void ntuplizer::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
 
 // Analyze (per event)
 void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
+   //int type = 99;  // 0:electrons 1:muons
+   //bool canFitVertex = false;
+   //bool hasValidVertex = false;
+   double temp_normalizedChi2;
+   double temp_Lxy_SV = 0;
+   double normalizedChi2 = 0;
+   /*double Lxy_PV = 0;  // Primary vertex
+   double Ixy_PV = 0;  // Primary vertex
+   double Lxy_BS = 0; // BeamSpot
+   double Ixy_BS = 0; // BeamSpot
+   double Lxy_0 = 0; // Center of the detector
+   double Ixy_0 = 0; // Center of the detector
+   double trackDxy = 0; // std PV
+   double trackIxy = 0; //  std PV
+   double trackDxy_PV = 0; // std PV
+   double trackIxy_PV = 0; //  std PV
+   double trackDxy_0 = 0; // CMS center
+   double trackIxy_0 = 0; // CMS center
+   double trackDxy_BS = 0; // BeamSpot
+   double trackIxy_BS = 0; // BeamSpot
+   double etaA = 0;
+   double etaB = 0;
+   double leadingPt = 0;
+   double subleadingPt = 0;
+   double leadingEt = 0;
+   double subleadingEt = 0;
+   double mass = 0;   
+   double ptll = 0;
+   double cosAlpha = 0;
+   double dPhi = 0;
+   double lldPhi = 0;
+   double dR = 0;
+   double relisoA = 0;
+   double relisoB = 0;
+   */
+   double vx = 0;                  // x coordinate of dilepton vertex
+   double vy = 0;                  // y coordinate of dilepton vertex
+   double px = 0;                  // x coordinate of primary vertex
+   double py = 0;                  // y coordinate of primary vertex
+   
+   double Lxy_SV = -99; //Lxy of the secondary vertex
+
 
    iEvent.getByToken(photonToken, photons);
    iEvent.getByToken(lowPtElectronToken, lowPtElectrons);
    iEvent.getByToken(electronToken, electrons);
+   iEvent.getByToken(primaryVertices, pVtxs);
+   
    ebRecHits_ = iEvent.get(reducedBarrelRecHitCollectionToken_);
    eeRecHits_ = iEvent.get(reducedEndcapRecHitCollectionToken_);
    //iEvent.getByToken(reducedBarrelRecHitCollectionToken_, ebRecHits_);
@@ -302,6 +372,7 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    // Clear all variables
    nSC = 0;
    SCs.clear();
+   PVs.clear();
    nLowPtElectron = 0;
    lowPtElecs.clear();
    nStdElectron = 0;
@@ -315,6 +386,9 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    lumiBlock = iEvent.id().luminosityBlock();
    run = iEvent.id().run();
 
+   // Primary Vertex
+  
+
    // Low Pt Electrons
    for (const auto& ele : *lowPtElectrons) {
      std::cout << ele.pt() << std::endl;
@@ -323,6 +397,7 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
      lowPtElecs.et.push_back(ele.et());
      lowPtElecs.phi.push_back(ele.phi());
      lowPtElecs.eta.push_back(ele.eta());
+     lowPtElecs.charge.push_back(ele.charge());
      lowPtElecs.sigmaIetaIphi.push_back(ele.sigmaIetaIphi());
      lowPtElecs.full5x5_sigmaIetaIphi.push_back(ele.full5x5_sigmaIetaIphi());
      lowPtElecs.dB.push_back(ele.dB());
@@ -340,6 +415,10 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
      lowPtElecs.ecalRegressionScale.push_back(ele.ecalRegressionScale());
      lowPtElecs.ecalRegressionSmear.push_back(ele.ecalRegressionSmear());
      
+     // Pairing electrons and finding tracks
+     // bool isEE = false;
+     
+
      // Get the time
      float ttime = 0.;
      //float tcx = 0.;
@@ -431,6 +510,111 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     // lowPtElecs.avgClusterZ.push_back(tcz/nbsc_seed);
    }
 
+   for (int i=0; i<nLowPtElectron; i++){
+    //Gets first electron
+    //std::cout << "Electron" << std::endl;
+    //std::cout << i << std::endl;
+    Lxy_SV = -99;
+    normalizedChi2 = 99;
+    //hasValidVertex = false;
+    for (int j=i+1; j<nLowPtElectron; j++){
+      //std::cout << "Paied with Electron" << std::endl;
+      //std::cout << j << std::endl;
+      //isEE = false;
+      double charge1 = lowPtElectrons->at(i).charge();
+      double charge2 = lowPtElectrons->at(j).charge();
+      if (charge1*charge2>0){
+        //std::cout << "Invalid Pair" << std::endl;
+        continue;
+      };
+        
+    
+      // Get tracks:
+
+      const reco::Track &tr_A = *(lowPtElectrons->at(i).gsfTrack());
+      const reco::Track &tr_B = *(lowPtElectrons->at(j).gsfTrack());
+      std::vector<reco::TransientTrack> vec_refitTracks;
+      reco::TransientTrack isotransienttrackA = theB->build(tr_A);
+      reco::TransientTrack isotransienttrackB = theB->build(tr_B);
+      vec_refitTracks.push_back(isotransienttrackA); vec_refitTracks.push_back(isotransienttrackB);
+    
+      // Fit tracks:
+      KalmanVertexFitter thefitterll;
+      TransientVertex myVertex = thefitterll.vertex(vec_refitTracks);
+      const reco::Vertex secV = myVertex;
+      const reco::Vertex PrimV = (*pVtxs)[0];
+
+
+      if (secV.isValid()) {
+      
+        //hasValidVertex = true;
+
+        // Define the axis along the direction of the distance is defined:
+        GlobalVector axis(0,0,0);
+        axis = GlobalVector(secV.x(),secV.y(),secV.z());
+        
+        // Define the errors and points of the CMS centre point and the beam spot:
+        /*//math::Error<3>::type e0; // dummy
+        //math::Error<3>::type cov = bs.covariance3D();
+        //math::XYZPoint pbs(bs.x0(), bs.y0(), bs.z0());
+        math::XYZPoint p0(0.0, 0.0, 0.0);
+
+        // Fake vertices for the CMS centre and beam spot:
+        const reco::Vertex v0(p0, e0);
+        const reco::Vertex vbs(pbs, cov);
+
+        // Measurements:
+        Measurement1D vMeas_PV = reco::SecondaryVertex::computeDist2d(pv,secV,axis,true);
+        Measurement1D vMeas_0 = reco::SecondaryVertex::computeDist2d(v0,secV,axis,false);
+        Measurement1D vMeas_BS = reco::SecondaryVertex::computeDist2d(vbs,secV,axis,true);
+        
+
+        // Distance values:
+        Lxy_0 = vMeas_0.value();
+        Ixy_0 = vMeas_0.significance();
+        Lxy_PV = vMeas_PV.value();
+        Ixy_PV = vMeas_PV.significance();
+        Lxy_BS = vMeas_BS.value();
+        Ixy_BS = vMeas_BS.significance();
+
+        */// Vertex position and fit details:
+        temp_normalizedChi2 = myVertex.normalisedChiSquared();         
+        vx = secV.x();
+        vy = secV.y();
+        
+        //std::cout << PrimV.x() << std::endl;
+        //std::cout << PVs.x << std::endl;
+        temp_Lxy_SV = std::sqrt(std::pow(vx-PrimV.x(), 2) + std::pow(vy-PrimV.y(), 2));
+        if (temp_normalizedChi2 < normalizedChi2){
+          Lxy_SV = temp_Lxy_SV;
+          normalizedChi2 = temp_normalizedChi2;
+          px = PrimV.x();
+          py = PrimV.y();
+        };
+        /*
+
+        // Kinematics: 
+        leadingPt = (tr_A.pt()>tr_B.pt())? tr_A.pt(): tr_B.pt();
+        subleadingPt = (tr_A.pt()<tr_B.pt())? tr_A.pt(): tr_B.pt();
+        etaA = tr_A.eta();
+        etaB = tr_B.eta();   
+
+        // Vector angles:  
+        TVector3 vec3A(tr_A.px(), tr_A.py(), tr_A.pz());
+        TVector3 vec3B(tr_B.px(), tr_B.py(), tr_B.pz());
+        TVector3 divec3 = vec3A + vec3B;
+        TVector3 vtxvec3(secV.x() - pv.x(), secV.y() - pv.y(), secV.z() - pv.z());
+        cosAlpha = TMath::Cos(vec3A.Angle(vec3B));
+        dPhi = divec3.DeltaPhi(vtxvec3);
+        dR = vec3A.DeltaR(vec3B);
+        */
+      };
+    };
+    lowPtElecs.Lxy_SV.push_back(Lxy_SV);
+    PVs.x.push_back(px);
+    PVs.y.push_back(py);
+   };
+
    // -> Superclusters
    //EcalClusterLazyTools lazyTool(iEvent, iSetup, ebReducedRecHitCollection_, eeReducedRecHitCollection_, esReducedRecHitCollection_);
    //edm::InputTag reducedEBRecHitCollection(string("reducedEcalRecHitsEB"));
@@ -456,10 +640,11 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
        }
 
        auto theSeedHit = recHits->find(id);
-       if (theSeedHit != recHits->end())
+       if (theSeedHit != recHits->end()){
          SCs.seedTime.push_back((*theSeedHit).time());
-       else
+       } else{
          SCs.seedTime.push_back(-99.);
+       }
      } else {
        SCs.seedTime.push_back(-99.);
      }

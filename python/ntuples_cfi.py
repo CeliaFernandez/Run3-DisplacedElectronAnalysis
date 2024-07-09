@@ -10,7 +10,8 @@ ntuples = cms.EDAnalyzer('ntuplizer',
     reducedEndcapRecHitCollection = cms.InputTag("reducedEgamma", "reducedEERecHits"),
     photonCollection = cms.InputTag("slimmedPhotons"),
     lowPtElectronCollection = cms.InputTag("slimmedLowPtElectrons"),
-    electronCollection = cms.InputTag("slimmedElectrons")
+    electronCollection = cms.InputTag("slimmedElectrons"),
+    primaryVertexCollection  = cms.InputTag("offlineSlimmedPrimaryVertices")
 )
 
 

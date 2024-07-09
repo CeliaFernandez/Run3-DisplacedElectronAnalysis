@@ -54,7 +54,7 @@ process.GlobalTag = GlobalTag(process.GlobalTag, '124X_mcRun3_2022_realistic_v5'
 
 ## Define the process to run 
 ## 
-process.load("Analysis.Run3-SuperclusterAnalysis.ntuples_cfi")
+process.load("Analysis.Run3-DisplacedElectronAnalysis.ntuples_cfi")
 
 process.p = cms.EndPath(process.ntuples)
 
