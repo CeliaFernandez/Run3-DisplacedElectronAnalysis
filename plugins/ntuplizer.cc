@@ -48,6 +48,18 @@
 #include "TH1F.h"
 #include "TFile.h"
 
+struct genPart {
+  std::vector<float> pt, eta, phi, m;
+  std::vector<float> vx, vy, vz, lxy;
+  std::vector<int> status, index, pdgId, motherIndex, motherPdgId;
+
+  void clear() {
+    pt.clear(); eta.clear(); phi.clear(); m.clear();
+    vx.clear(); vy.clear(); vz.clear(); lxy.clear();
+    status.clear(); index.clear(); pdgId.clear(); motherIndex.clear(); motherPdgId.clear();
+  }
+};
+
 struct PV {
   std::vector<float> x;
   std::vector<float> y;
@@ -133,6 +145,9 @@ class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
       edm::EDGetTokenT<edm::View<reco::Vertex> > primaryVertices;
       edm::Handle<edm::View<reco::Vertex> > pVtxs;
 
+      edm::EDGetTokenT<edm::View<reco::GenParticle> > genParticleToken;
+      edm::Handle<edm::View<reco::GenParticle> > genParticles;
+
       edm::EDGetTokenT<edm::View<pat::Photon> > photonToken;
       edm::Handle<edm::View<pat::Photon> > photons;
 
@@ -167,6 +182,9 @@ class ntuplizer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
       Int_t run = 0;
 
       // Branch variables
+      int nGP;
+      genPart genParts;
+
       int nSC;
       SC SCs;
 
@@ -204,6 +222,7 @@ ntuplizer::ntuplizer(const edm::ParameterSet& iConfig)
    counts = new TH1F("counts", "", 1, 0, 1);
 
    isData = parameters.getParameter<bool>("isData");
+   genParticleToken = consumes<edm::View<reco::GenParticle> >  (parameters.getParameter<edm::InputTag>("genCollection"));
    photonToken = consumes<edm::View<pat::Photon> >  (parameters.getParameter<edm::InputTag>("photonCollection"));
    lowPtElectronToken = consumes<edm::View<pat::Electron> >  (parameters.getParameter<edm::InputTag>("lowPtElectronCollection"));
    electronToken = consumes<edm::View<pat::Electron> >  (parameters.getParameter<edm::InputTag>("electronCollection"));
@@ -235,6 +254,20 @@ void ntuplizer::beginJob() {
    tree_out->Branch("event", &event, "event/I");
    tree_out->Branch("lumiBlock", &lumiBlock, "lumiBlock/I");
    tree_out->Branch("run", &run, "run/I");
+
+   tree_out->Branch("genParticle_pt", &genParts.pt);
+   tree_out->Branch("genParticle_eta", &genParts.eta);
+   tree_out->Branch("genParticle_phi", &genParts.phi);
+   tree_out->Branch("genParticle_m", &genParts.m);
+   tree_out->Branch("genParticle_vx", &genParts.vx);
+   tree_out->Branch("genParticle_vy", &genParts.vy);
+   tree_out->Branch("genParticle_vz", &genParts.vz);
+   tree_out->Branch("genParticle_lxy", &genParts.lxy);
+   tree_out->Branch("genParticle_status", &genParts.status);
+   tree_out->Branch("genParticle_index", &genParts.index);
+   tree_out->Branch("genParticle_pdgId", &genParts.pdgId);
+   tree_out->Branch("genParticle_motherIndex", &genParts.motherIndex);
+   tree_out->Branch("genParticle_motherPdgId", &genParts.motherPdgId);
 
    tree_out->Branch("primary_Vertex_x", &PVs.x);
    tree_out->Branch("primary_Vertex_y", &PVs.y);
@@ -320,35 +353,6 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    double temp_normalizedChi2;
    double temp_Lxy_SV = 0;
    double normalizedChi2 = 0;
-   /*double Lxy_PV = 0;  // Primary vertex
-   double Ixy_PV = 0;  // Primary vertex
-   double Lxy_BS = 0; // BeamSpot
-   double Ixy_BS = 0; // BeamSpot
-   double Lxy_0 = 0; // Center of the detector
-   double Ixy_0 = 0; // Center of the detector
-   double trackDxy = 0; // std PV
-   double trackIxy = 0; //  std PV
-   double trackDxy_PV = 0; // std PV
-   double trackIxy_PV = 0; //  std PV
-   double trackDxy_0 = 0; // CMS center
-   double trackIxy_0 = 0; // CMS center
-   double trackDxy_BS = 0; // BeamSpot
-   double trackIxy_BS = 0; // BeamSpot
-   double etaA = 0;
-   double etaB = 0;
-   double leadingPt = 0;
-   double subleadingPt = 0;
-   double leadingEt = 0;
-   double subleadingEt = 0;
-   double mass = 0;   
-   double ptll = 0;
-   double cosAlpha = 0;
-   double dPhi = 0;
-   double lldPhi = 0;
-   double dR = 0;
-   double relisoA = 0;
-   double relisoB = 0;
-   */
    double vx = 0;                  // x coordinate of dilepton vertex
    double vy = 0;                  // y coordinate of dilepton vertex
    double px = 0;                  // x coordinate of primary vertex
@@ -357,6 +361,7 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    double Lxy_SV = -99; //Lxy of the secondary vertex
 
 
+   iEvent.getByToken(genParticleToken, genParticles);
    iEvent.getByToken(photonToken, photons);
    iEvent.getByToken(lowPtElectronToken, lowPtElectrons);
    iEvent.getByToken(electronToken, electrons);
@@ -370,6 +375,8 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    const TransientTrackBuilder* theB = &iSetup.getData(ttbESToken_);
 
    // Clear all variables
+   nGP = 0;
+   genParts.clear();
    nSC = 0;
    SCs.clear();
    PVs.clear();
@@ -388,7 +395,41 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
    // Primary Vertex
   
+   // Generated particles
+   if (!isData) {
+     for (unsigned int iGen=0; iGen<genParticles->size(); iGen++) {
+       auto genpart = genParticles->at(iGen);
+       if (abs(genpart.pdgId())!=13 && // Muon
+           abs(genpart.pdgId())!=11 && // Electron
+           abs(genpart.pdgId())!=443) // JPsi
+         continue;
+       if (!genpart.isLastCopy())
+         continue;
 
+       int motherIdx = -1, motherPdgId = 0; // Default value
+       if (genpart.numberOfMothers() > 0) {
+         motherIdx = genpart.motherRef().index();
+         while (genParticles->at(motherIdx).pdgId() == genpart.pdgId()) {
+           motherIdx = genParticles->at(motherIdx).motherRef().index();
+         }
+         motherPdgId = genParticles->at(motherIdx).pdgId();
+       }
+       genParts.pt.push_back(genpart.pt());
+       genParts.eta.push_back(genpart.eta());
+       genParts.phi.push_back(genpart.phi());
+       genParts.m.push_back(genpart.mass());
+       genParts.vx.push_back(genpart.vx());
+       genParts.vy.push_back(genpart.vy());
+       genParts.vz.push_back(genpart.vz());
+       genParts.lxy.push_back(TMath::Hypot(genpart.vx(), genpart.vy()));
+       genParts.status.push_back(genpart.status());
+       genParts.index.push_back(iGen);
+       genParts.pdgId.push_back(genpart.pdgId());
+       genParts.motherIndex.push_back(motherIdx);
+       genParts.motherPdgId.push_back(motherPdgId);
+     }
+   }
+     
    // Low Pt Electrons
    for (const auto& ele : *lowPtElectrons) {
      std::cout << ele.pt() << std::endl;
@@ -414,10 +455,6 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
      lowPtElecs.ecalSmear.push_back(ele.ecalSmear());
      lowPtElecs.ecalRegressionScale.push_back(ele.ecalRegressionScale());
      lowPtElecs.ecalRegressionSmear.push_back(ele.ecalRegressionSmear());
-     
-     // Pairing electrons and finding tracks
-     // bool isEE = false;
-     
 
      // Get the time
      float ttime = 0.;
@@ -510,6 +547,7 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     // lowPtElecs.avgClusterZ.push_back(tcz/nbsc_seed);
    }
 
+   // Pairing electrons and finding tracks
    for (int i=0; i<nLowPtElectron; i++){
     //Gets first electron
     //std::cout << "Electron" << std::endl;
@@ -520,7 +558,6 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     for (int j=i+1; j<nLowPtElectron; j++){
       //std::cout << "Paied with Electron" << std::endl;
       //std::cout << j << std::endl;
-      //isEE = false;
       double charge1 = lowPtElectrons->at(i).charge();
       double charge2 = lowPtElectrons->at(j).charge();
       if (charge1*charge2>0){
@@ -530,7 +567,6 @@ void ntuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
         
     
       // Get tracks:
-
       const reco::Track &tr_A = *(lowPtElectrons->at(i).gsfTrack());
       const reco::Track &tr_B = *(lowPtElectrons->at(j).gsfTrack());
       std::vector<reco::TransientTrack> vec_refitTracks;
